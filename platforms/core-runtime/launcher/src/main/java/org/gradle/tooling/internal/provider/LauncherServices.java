@@ -42,7 +42,6 @@ import org.gradle.internal.buildtree.BuildModelParameters;
 import org.gradle.internal.buildtree.BuildTreeActionExecutor;
 import org.gradle.internal.buildtree.BuildTreeLifecycleListener;
 import org.gradle.internal.buildtree.ProblemReportingBuildActionRunner;
-import org.gradle.internal.code.UserCodeApplicationContext;
 import org.gradle.internal.concurrent.ExecutorFactory;
 import org.gradle.internal.enterprise.core.GradleEnterprisePluginManager;
 import org.gradle.internal.event.ListenerManager;
@@ -71,8 +70,8 @@ import org.gradle.internal.watch.vfs.FileChangeListeners;
 import org.gradle.internal.work.ProjectParallelExecutionController;
 import org.gradle.launcher.exec.BuildCompletionNotifyingBuildActionRunner;
 import org.gradle.launcher.exec.BuildOutcomeReportingBuildActionRunner;
-import org.gradle.launcher.exec.ChainingBuildActionRunner;
 import org.gradle.launcher.exec.DefaultBuildTreeActionExecutor;
+import org.gradle.launcher.exec.ChainingBuildActionRunner;
 import org.gradle.launcher.exec.RootBuildLifecycleBuildActionExecutor;
 import org.gradle.problems.buildtree.ProblemDiagnosticsFactory;
 import org.gradle.problems.buildtree.ProblemReporter;
@@ -137,16 +136,13 @@ public class LauncherServices extends AbstractGradleModuleServices {
             Clock clock,
             FileSystem fileSystem,
             BuildLifecycleAwareVirtualFileSystem virtualFileSystem,
-            BuildTreeActionExecutor buildTreeActionExecutor,
-            UserCodeApplicationContext userCodeApplicationContext
+            BuildTreeActionExecutor buildTreeActionExecutor
         ) {
             CaseSensitivity caseSensitivity = fileSystem.isCaseSensitive() ? CASE_SENSITIVE : CASE_INSENSITIVE;
             return new SubscribableBuildActionExecutor(
                 listenerManager,
                 buildOperationListenerManager,
-                listenerFactory,
-                eventConsumer,
-                userCodeApplicationContext,
+                listenerFactory, eventConsumer,
                 new ContinuousBuildActionExecutor(
                     workListeners,
                     fileChangeListeners,

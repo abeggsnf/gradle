@@ -19,12 +19,11 @@ package org.gradle.tooling.internal.provider
 import org.gradle.initialization.BuildEventConsumer
 import org.gradle.internal.build.event.BuildEventListenerFactory
 import org.gradle.internal.build.event.BuildEventSubscriptions
-import org.gradle.internal.code.UserCodeApplicationContext
 import org.gradle.internal.event.ListenerManager
 import org.gradle.internal.operations.BuildOperationListener
 import org.gradle.internal.operations.BuildOperationListenerManager
-import org.gradle.internal.session.BuildSessionActionExecutor
 import org.gradle.internal.session.BuildSessionContext
+import org.gradle.internal.session.BuildSessionActionExecutor
 import org.gradle.tooling.events.OperationType
 import org.gradle.tooling.internal.provider.action.SubscribableBuildAction
 import spock.lang.Specification
@@ -45,10 +44,10 @@ class SubscribableBuildActionExecutorSpec extends Specification {
         def listener1 = Stub(BuildOperationListener)
         def listener2 = Stub(BuildOperationListener)
         def factory = Stub(BuildEventListenerFactory) {
-            createListeners(_, consumer, _) >> [listener1, listener2]
+            createListeners(_, consumer) >> [listener1, listener2]
         }
 
-        def runner = new SubscribableBuildActionExecutor(listenerManager, buildOperationListenerManager, factory, consumer, Mock(UserCodeApplicationContext), delegate)
+        def runner = new SubscribableBuildActionExecutor(listenerManager, buildOperationListenerManager, factory, consumer, delegate)
 
         when:
         runner.execute(buildAction, buildSessionContext)

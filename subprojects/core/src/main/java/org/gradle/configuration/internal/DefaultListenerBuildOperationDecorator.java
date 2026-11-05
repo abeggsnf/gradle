@@ -70,7 +70,8 @@ public class DefaultListenerBuildOperationDecorator implements ListenerBuildOper
         if (application == null || action instanceof InternalListener) {
             return action;
         }
-        return new BuildOperationEmittingAction<>(application, registrationPoint, action);
+        Action<T> decorated = application.reapplyLater(action);
+        return new BuildOperationEmittingAction<>(application.getId(), registrationPoint, decorated);
     }
 
     @Override
@@ -154,22 +155,22 @@ public class DefaultListenerBuildOperationDecorator implements ListenerBuildOper
 
     private class BuildOperationEmittingAction<T> implements Action<T> {
 
-        private final UserCodeApplicationContext.Application application;
+        private final UserCodeApplicationId applicationId;
         private final String registrationPoint;
         private final Action<T> delegate;
 
-        private BuildOperationEmittingAction(UserCodeApplicationContext.Application application, String registrationPoint, Action<T> delegate) {
-            this.application = application;
+        private BuildOperationEmittingAction(UserCodeApplicationId applicationId, String registrationPoint, Action<T> delegate) {
+            this.applicationId = applicationId;
             this.delegate = delegate;
             this.registrationPoint = registrationPoint;
         }
 
         @Override
         public void execute(final T arg) {
-            buildOperationRunner.run(new Operation(application.getId(), registrationPoint) {
+            buildOperationRunner.run(new Operation(applicationId, registrationPoint) {
                 @Override
                 public void run(final BuildOperationContext context) {
-                    application.reapplyAction(delegate, arg, UserCodeApplicationContext.CodeType.LISTENER);
+                    delegate.execute(arg);
                     context.setResult(RESULT);
                 }
             });
@@ -199,7 +200,7 @@ public class DefaultListenerBuildOperationDecorator implements ListenerBuildOper
                         Object[] finalArgs = numClosureArgs < args.length ? Arrays.copyOf(args, numClosureArgs) : args;
                         delegate.call(finalArgs);
                         context.setResult(RESULT);
-                    }, UserCodeApplicationContext.CodeType.LISTENER);
+                    });
                 }
             });
         }
@@ -260,7 +261,7 @@ public class DefaultListenerBuildOperationDecorator implements ListenerBuildOper
                             } catch (Exception e) {
                                 throw UncheckedException.throwAsUncheckedException(e);
                             }
-                        }, UserCodeApplicationContext.CodeType.LISTENER);
+                        });
                     }
                 });
 

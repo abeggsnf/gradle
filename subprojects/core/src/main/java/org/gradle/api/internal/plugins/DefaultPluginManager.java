@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.gradle.api.internal.plugins;
 
 import com.google.common.collect.Lists;
@@ -42,15 +43,13 @@ import org.gradle.plugin.use.PluginId;
 import org.gradle.plugin.use.internal.DefaultPluginId;
 import org.jspecify.annotations.Nullable;
 
+import javax.annotation.concurrent.NotThreadSafe;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import javax.annotation.concurrent.NotThreadSafe;
-import org.gradle.api.internal.project.ProjectIdentity;
-import org.gradle.util.Path;
 
 @NotThreadSafe
 public class DefaultPluginManager implements PluginManagerInternal {
@@ -172,9 +171,8 @@ public class DefaultPluginManager implements PluginManagerInternal {
             } else {
                 final Runnable adder = addPluginInternal(plugin);
                 if (adder != null) {
-                    UserCodeApplicationContext.Target appTarget = getApplicationTargetFor(target);
                     UserCodeSource source = new UserCodeSource.Binary(plugin.getDisplayName(), pluginClass.getName(), pluginIdStr);
-                    userCodeApplicationContext.apply(source, appTarget, userCodeApplicationId ->
+                    userCodeApplicationContext.apply(source, userCodeApplicationId ->
                         buildOperationRunner.run(new AddPluginBuildOperation(adder, plugin, pluginIdStr, pluginClass, userCodeApplicationId))
                     );
                 }
@@ -186,19 +184,6 @@ public class DefaultPluginManager implements PluginManagerInternal {
         } finally {
             Thread.currentThread().setContextClassLoader(contextClassLoader);
         }
-    }
-
-    private static UserCodeApplicationContext.Target getApplicationTargetFor(PluginTarget target) {
-        ConfigurationTargetIdentifier id = target.getConfigurationTargetIdentifier();
-        if (id.getTargetType() == ConfigurationTargetIdentifier.Type.PROJECT) {
-            return new UserCodeApplicationContext.Target.Project(
-                ProjectIdentity.computeProjectIdentityPath(
-                    Path.path(id.getBuildPath()),
-                    Path.path(id.getTargetPath())
-                )
-            );
-        }
-        return UserCodeApplicationContext.Target.Other.INSTANCE;
     }
 
     private void addPlugin(Runnable adder, PluginImplementation<?> plugin, String pluginId, Class<?> pluginClass) {

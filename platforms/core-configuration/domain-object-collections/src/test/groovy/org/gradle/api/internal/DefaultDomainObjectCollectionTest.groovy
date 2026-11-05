@@ -22,7 +22,6 @@ import org.gradle.api.internal.collections.IterationOrderRetainingSetElementSour
 import org.gradle.api.internal.provider.ProviderInternal
 import org.gradle.api.internal.provider.ValueSupplier
 import org.gradle.api.specs.Spec
-import org.gradle.internal.code.UserCodeApplicationContext
 import org.gradle.internal.code.UserCodeSource
 import org.gradle.test.fixtures.ExpectDeprecation
 import org.gradle.util.TestUtil
@@ -187,7 +186,7 @@ class DefaultDomainObjectCollectionTest extends AbstractDomainObjectCollectionSp
         def collection = null
 
         given:
-        userCodeApplicationContext.apply(source, UserCodeApplicationContext.Target.Other.INSTANCE) {
+        userCodeApplicationContext.apply(source) {
             collection = container.matching(spec)
         }
         assert userCodeApplicationContext.current() == null
