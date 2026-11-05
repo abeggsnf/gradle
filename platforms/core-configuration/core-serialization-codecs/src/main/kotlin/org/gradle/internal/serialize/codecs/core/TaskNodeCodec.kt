@@ -24,14 +24,11 @@ import org.gradle.api.internal.TaskInternal
 import org.gradle.api.internal.TaskOutputsInternal
 import org.gradle.api.internal.file.FileCollectionFactory
 import org.gradle.api.internal.project.ProjectInternal
-import org.gradle.api.internal.provider.PropertyFactory
 import org.gradle.api.internal.provider.Providers
 import org.gradle.api.internal.tasks.TaskDestroyablesInternal
 import org.gradle.api.internal.tasks.TaskInputFilePropertyBuilderInternal
 import org.gradle.api.internal.tasks.TaskLocalStateInternal
-import org.gradle.api.internal.tasks.properties.FileParameterUtils
 import org.gradle.api.logging.StandardOutputListener
-import org.gradle.api.provider.HasConfigurableValue
 import org.gradle.api.provider.Provider
 import org.gradle.api.specs.Spec
 import org.gradle.api.tasks.TaskProvider
@@ -408,11 +405,8 @@ suspend fun WriteContext.writeRegisteredPropertiesOf(task: Task) {
         writePropertyValue(kind, propertyName, propertyValue)
     }
 
-    suspend fun writeInputProperty(propertyName: String, propertyValue: Any?, nestedProviders: List<Provider<*>>) {
-        writeString(propertyName)
-        write(nestedProviders)
-        writePropertyValue(PropertyKind.InputProperty, propertyName, propertyValue)
-    }
+    suspend fun writeInputProperty(propertyName: String, propertyValue: Any?) =
+        writeProperty(propertyName, propertyValue, PropertyKind.InputProperty)
 
     suspend fun writeOutputProperty(propertyName: String, propertyValue: Any?) =
         writeProperty(propertyName, propertyValue, PropertyKind.OutputProperty)
@@ -422,16 +416,8 @@ suspend fun WriteContext.writeRegisteredPropertiesOf(task: Task) {
         property.run {
             when (this) {
                 is RegisteredProperty.InputFile -> {
-                    val value = DeferredUtil.unpackNestableDeferred(propertyValue)
-                    val finalValue = adaptInputFileValueForSerialization(value, filePropertyType)
-                    // Keep nested provider presence available after the file value is serialized as a FileCollection.
-                    val nestedProviders =
-                        if (filePropertyType == InputFilePropertyType.FILES && !optional) {
-                            FileParameterUtils.findNestedProviders(value)
-                        } else {
-                            emptyList()
-                        }
-                    writeInputProperty(propertyName, finalValue, nestedProviders)
+                    val finalValue = adaptInputFileValueForSerialization(DeferredUtil.unpackNestableDeferred(propertyValue), filePropertyType)
+                    writeInputProperty(propertyName, finalValue)
                     writeBoolean(optional)
                     writeBoolean(true)
                     writeEnum(filePropertyType)
@@ -443,7 +429,7 @@ suspend fun WriteContext.writeRegisteredPropertiesOf(task: Task) {
 
                 is RegisteredProperty.Input -> {
                     val finalValue = DeferredUtil.unpackNestableDeferred(propertyValue)
-                    writeInputProperty(propertyName, finalValue, emptyList())
+                    writeInputProperty(propertyName, finalValue)
                     writeBoolean(optional)
                     writeBoolean(false)
                 }
@@ -473,10 +459,10 @@ suspend fun WriteContext.writeRegisteredPropertiesOf(task: Task) {
  * mutable internals. This is semantically equivalent to what consumers of `TaskInputs` do at execution time
  * via `FileParameterUtils.resolveInputFileValue`.
  *
- * Direct [Provider] values retain their shape because validation handles their presence specially. For required
- * `inputs.files(...)`, nested providers are serialized separately so their presence can be checked again after restore
- * without serializing the surrounding collection shape. [TaskProvider] values are omitted from that validation state
- * and remain wrapped; they are always present and cannot be serialized directly.
+ * One exception are [Provider] values. These are handled specially by the validation logic, so we have to preserve
+ * the shape. And yes, this means that `files(absentProvider)` fails and `files(listOf(absentProvider))` works.
+ * An exception to the exception is [TaskProvider], which it cannot be serialized directly but only inside a file collection.
+ * It is always present, so wrapping it is okay.
  *
  * Only applied to [InputFilePropertyType.FILES] — [InputFilePropertyType.FILE] and [InputFilePropertyType.DIRECTORY]
  * expect a single path-like value on read, so wrapping in a [FileCollection] would break `inputs.file(...)` /
@@ -607,7 +593,6 @@ private
 suspend fun ReadContext.readInputPropertiesOf(task: Task) =
     readCollection {
         val propertyName = readString()
-        val nestedProviders = readNonNull<List<Provider<*>>>()
         readPropertyValue(PropertyKind.InputProperty, propertyName) { propertyValue ->
             val optional = readBoolean()
             val isFileInputProperty = readBoolean()
@@ -622,15 +607,7 @@ suspend fun ReadContext.readInputPropertiesOf(task: Task) =
                         when (filePropertyType) {
                             InputFilePropertyType.FILE -> file(pack(propertyValue))
                             InputFilePropertyType.DIRECTORY -> dir(pack(propertyValue))
-                            InputFilePropertyType.FILES -> {
-                                val value = pack(propertyValue)
-                                if (nestedProviders.isEmpty()) {
-                                    files(value)
-                                } else {
-                                    val presenceProviders = nestedProviders.toPresenceOnlyProviders(isolate.owner.serviceOf<PropertyFactory>())
-                                    files(value, presenceProviders)
-                                }
-                            }
+                            InputFilePropertyType.FILES -> files(pack(propertyValue))
                         }
                     } as TaskInputFilePropertyBuilderInternal).run {
                         withPropertyName(propertyName)
@@ -648,20 +625,6 @@ suspend fun ReadContext.readInputPropertiesOf(task: Task) =
                         .optional(optional)
                 }
             }
-        }
-    }
-
-
-private
-fun List<Provider<*>>.toPresenceOnlyProviders(propertyFactory: PropertyFactory): List<Provider<*>> =
-    map { provider ->
-        // Keep only the presence of each provider, so it contributes no files, and whether it is a configurable property,
-        // so validation reports the same solution as it does without the configuration cache.
-        val presence = Providers.memoizing(Providers.internal(provider.map { emptyList<Any>() }))
-        if (provider is HasConfigurableValue) {
-            propertyFactory.property(Any::class.java).apply { set(presence) }
-        } else {
-            presence
         }
     }
 
@@ -700,3 +663,5 @@ fun createTask(project: ProjectInternal, taskName: String, taskClass: Class<out 
     }
     return task
 }
+
+

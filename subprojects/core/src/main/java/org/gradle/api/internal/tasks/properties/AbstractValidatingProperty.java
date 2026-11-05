@@ -16,6 +16,7 @@
 
 package org.gradle.api.internal.tasks.properties;
 
+import com.google.common.base.Suppliers;
 import org.gradle.api.problems.ProblemSpec;
 import org.gradle.api.provider.HasConfigurableValue;
 import org.gradle.api.provider.Provider;
@@ -25,6 +26,7 @@ import org.gradle.util.internal.DeferredUtil;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Locale;
+import java.util.function.Supplier;
 
 import static org.gradle.internal.deprecation.Documentation.userManual;
 
@@ -64,8 +66,9 @@ public abstract class AbstractValidatingProperty implements ValidatingProperty {
         // unnest callables without resolving deferred values (providers, factories)
         Object unnested = DeferredUtil.unpackNestableDeferred(value.call());
         if (isPresent(unnested)) {
-            // the value is passed unresolved; each action decides whether to resolve the root provider, see ValidationActions.validate()
-            validationAction.validate(propertyName, () -> unnested, context);
+            // only resolve deferred values if actually required by some action
+            Supplier<Object> valueSupplier = Suppliers.memoize(() -> DeferredUtil.unpack(unnested));
+            validationAction.validate(propertyName, valueSupplier, context);
         } else {
             if (!optional) {
                 reportValueNotSet(propertyName, context, hasConfigurableValue(unnested));
@@ -81,7 +84,7 @@ public abstract class AbstractValidatingProperty implements ValidatingProperty {
         return value != null;
     }
 
-    static boolean hasConfigurableValue(@Nullable Object value) {
+    private static boolean hasConfigurableValue(@Nullable Object value) {
         // TODO We should check the type of the property here, not its value
         //   With the current code we'd assume a `Provider<String>` to be configurable when
         //   the getter returns `null`. The property type is not currently available in this
